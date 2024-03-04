@@ -279,7 +279,7 @@ class BatchProcess:
 
 
     def start_simulation_FCFS(self):
-        while len(self.ready_list) < 3 and self.process_list:
+        while (len(self.ready_list) + len(self.in_execution) + len(self.blocked_list)) < 3 and self.process_list:
             self.ready_list.append(self.process_list.pop(0))
             self.list.delete(0)
             self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Tiempo Estimado: {self.ready_list[-1]['max_time']}s")
@@ -287,13 +287,13 @@ class BatchProcess:
         if not self.in_execution and self.ready_list:
             self.in_execution.append(self.ready_list.pop(0))
             self.process = self.in_execution[0]
+            self.widget_ready_list.delete(0)
             self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s")
 
             self.execution_time_count = self.process['exec_time']
             self.remaining_time_count = self.process['remaining_time']
             self.execution_timer()
-        
-
+                    
         if not self.process_list and not self.ready_list and not self.in_execution and not self.blocked_list:
             self.execution_data.config(text="")
             self.remaining_batch.config(text="Lotes restantes:\n0")
@@ -318,34 +318,25 @@ class BatchProcess:
         if self.process:
             self.execution_data.config(text="INTERRUMPIDO")
             self.blocked_list.append(self.in_execution.pop(0))
-            if self.ready_list:
-                self.in_execution.append(self.ready_list.pop(0))
-            elif self.process_list:
-                self.ready_list.append(self.process_list.pop(0))
-                self.in_execution.append(self.ready_list.pop(0))
+
+            # Adjust the remaining time of the last process to start where it was interrupted
+            self.blocked_list[-1]['remaining_time'] += 1
+            self.blocked_list[-1]['exec_time'] -= 1
             
             self.root.after_cancel(self.current_timer)
             self.root.after(4000, self.resume_interrupted_process)
 
-
     def resume_interrupted_process(self):
-        self.process['exec_time'] -= 1
-        self.process['remaining_time'] += 1
-
-        self.widget_ready_list.delete(0)
-        self.ready_list.append(self.process)
-        self.widget_ready_list.insert('end', f"#{self.process['id']} | Tiempo Restante: {self.process['remaining_time']}s")
+        self.start_simulation_FCFS()
 
         self.root.after(10000, self.reappend_blocked_process)
-        
-        self.start_simulation_FCFS()
     
     def reappend_blocked_process(self):
         if self.blocked_list:
             self.ready_list.append(self.blocked_list.pop(0))
-        if not self.in_execution and self.ready_list:
-            self.in_execution.append(self.ready_list.pop(0))
-    
+            process = self.ready_list[-1]
+            self.widget_ready_list.insert('end', f"#{process['id']} | Tiempo Restante: {process['remaining_time']}s")
+            self.start_simulation_FCFS()
 
     def pause_process(self, event):
         if self.process:
