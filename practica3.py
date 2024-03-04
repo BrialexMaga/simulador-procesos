@@ -5,6 +5,12 @@ import time
 class BatchProcess:
     def __init__(self, root):
         # variables
+        self.id_counter = 0
+        self.process_list = []  # New processes, not ready
+        self.ready_list = []
+        self.in_execution = []
+        self.blocked_list = []
+
         self.current_timer = None
         self.process = None
         self.is_paused = False
@@ -80,16 +86,14 @@ class BatchProcess:
 
         self.create_capture_process_frame()
         self.create_process_list_frame()
-        self.create_execution_batch_frame()
+        #self.create_execution_batch_frame()
+        self.create_ready_list_frame()
         self.create_finished_process_frame()
 
 
         self.multiple_frames.pack(fill="x")
 
     def create_capture_process_frame(self):
-        self.id_counter = 0
-        self.process_list = []
-        self.execution_list_list = []
         self.main_frame = tk.Frame(self.multiple_frames)
 
         self.process_label = tk.Label(self.main_frame, text="Capturar proceso", font=("Arial", 15))
@@ -122,7 +126,7 @@ class BatchProcess:
         self.list_frame = tk.Frame(self.multiple_frames, width=200, height=275)
         self.list_frame.pack_propagate(False)
 
-        self.list_label = tk.Label(self.list_frame, text="Lista de procesos", font=("Arial", 15))
+        self.list_label = tk.Label(self.list_frame, text="Procesos Nuevos", font=("Arial", 15))
         self.list = tk.Listbox(self.list_frame, font=("Arial", 10))
 
         # Packed content
@@ -132,19 +136,21 @@ class BatchProcess:
         # Add to 'multiple frames'
         self.list_frame.grid(row=0, column=1, padx=0, pady=0)
 
-    def create_execution_batch_frame(self):
-        self.execution_batch_frame = tk.Frame(self.multiple_frames, width=235, height=275)
-        self.execution_batch_frame.pack_propagate(False)
+    
+    def create_ready_list_frame(self):
+        self.ready_processes_frame = tk.Frame(self.multiple_frames, width=235, height=275)
+        self.ready_processes_frame.pack_propagate(False)
 
-        self.execution_batch_label = tk.Label(self.execution_batch_frame, text="Lote en ejecución", font=("Arial", 15))
-        self.execution_list = tk.Listbox(self.execution_batch_frame, font=("Arial", 10))
+        self.title_ready_frame_label = tk.Label(self.ready_processes_frame, text="Procesos Listos", font=("Arial", 15))
+        self.widget_ready_list = tk.Listbox(self.ready_processes_frame, font=("Arial", 10))
 
         # Packed content
-        self.execution_batch_label.pack(padx=10, pady=10)
-        self.execution_list.pack(fill="both", expand=True)
+        self.title_ready_frame_label.pack(padx=10, pady=10)
+        self.widget_ready_list.pack(fill="both", expand=True)
 
         # Add to 'multiple frames'
-        self.execution_batch_frame.grid(row=0, column=2, padx=0, pady=0)
+        self.ready_processes_frame.grid(row=0, column=2, padx=0, pady=0)
+
 
     def create_finished_process_frame(self):
         self.finished_frame = tk.Frame(self.multiple_frames, width=200, height=275)
@@ -228,10 +234,12 @@ class BatchProcess:
             self.process['remaining_time'] -= 1
             self.current_timer = self.root.after(1000, self.execution_timer)
         else:
-            self.execution_list.delete(0)
+            self.widget_ready_list.delete(0)
             self.operate_result()
             self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = {self.result}")
-            self.start_simulation_batch()
+            self.in_execution.pop(0)            # Clean the process in execution
+            
+            self.start_simulation_FCFS()
 
 
     def operate_result(self):
@@ -270,48 +278,23 @@ class BatchProcess:
             self.result = f"Error: {e}"
 
 
-    def start_simulation_batch(self):
-        if self.process_list or self.execution_list_list:
-            if not self.execution_list_list:
-                if self.batch_count != 0:
-                    self.finished_list.insert(0, f"--------  Fin Lote {self.batch_count}   --------")
-                
-                self.batch_count += 1
-                
-                process_for_batch = 3
-                no_batch, no_remaing = divmod(len(self.process_list), process_for_batch)
+    def start_simulation_FCFS(self):
+        while len(self.ready_list) < 3 and self.process_list:
+            self.ready_list.append(self.process_list.pop(0))
+            self.list.delete(0)
+            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Tiempo Estimado: {self.ready_list[-1]['max_time']}s")
+        
+        if not self.in_execution and self.ready_list:
+            self.in_execution.append(self.ready_list.pop(0))
+            self.process = self.in_execution[0]
+            self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s")
 
-                if no_batch:
-                    i = 0
-                    while i < process_for_batch and self.process_list:
-                        self.process = self.process_list.pop(0)
-                        self.execution_list.insert('end', f"#{self.process['id']} | Tiempo Estimado: {self.process['max_time']}s")
-                        self.execution_list_list.append(self.process)
-                        self.list.delete(0)
-                        i += 1
-                    no_batch -= 1 if not no_remaing else 0
-                    self.remaining_batch.config(text=f"Lotes restantes:\n{no_batch}")
+            self.execution_time_count = self.process['exec_time']
+            self.remaining_time_count = self.process['remaining_time']
+            self.execution_timer()
+        
 
-                else:
-                    i = 0
-                    while i < no_remaing and self.process_list:
-                        self.process = self.process_list.pop(0)
-                        self.execution_list.insert('end', f"#{self.process['id']} | Tiempo Estimado: {self.process['max_time']}s")
-                        self.execution_list_list.append(self.process)
-                        self.list.delete(0)
-                        i += 1
-                    no_batch = 0
-                    self.remaining_batch.config(text=f"Lotes restantes:\n{no_batch}")
-                
-                self.finished_list.insert(0, f"-------- Inicio Lote {self.batch_count} --------")
-            if self.execution_list_list:
-                self.process = self.execution_list_list.pop(0)
-                self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s")
-
-                self.execution_time_count = self.process['exec_time']
-                self.remaining_time_count = self.process['remaining_time']
-                self.execution_timer()
-        else:
+        if not self.process_list and not self.ready_list and not self.in_execution and not self.blocked_list:
             self.execution_data.config(text="")
             self.remaining_batch.config(text="Lotes restantes:\n0")
             self.execution_time.config(text="")
@@ -326,7 +309,7 @@ class BatchProcess:
             self.root.after(4000, self.resume_stopped_process)
     
     def resume_stopped_process(self):
-        self.execution_list.delete(0)
+        self.widget_ready_list.delete(0)
         self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = ERROR")
         self.start_simulation_batch()
 
@@ -334,19 +317,36 @@ class BatchProcess:
     def interrupt_process(self, event):
         if self.process:
             self.execution_data.config(text="INTERRUMPIDO")
+            self.blocked_list.append(self.in_execution.pop(0))
+            if self.ready_list:
+                self.in_execution.append(self.ready_list.pop(0))
+            elif self.process_list:
+                self.ready_list.append(self.process_list.pop(0))
+                self.in_execution.append(self.ready_list.pop(0))
+            
             self.root.after_cancel(self.current_timer)
             self.root.after(4000, self.resume_interrupted_process)
+
 
     def resume_interrupted_process(self):
         self.process['exec_time'] -= 1
         self.process['remaining_time'] += 1
+
+        self.widget_ready_list.delete(0)
+        self.ready_list.append(self.process)
+        self.widget_ready_list.insert('end', f"#{self.process['id']} | Tiempo Restante: {self.process['remaining_time']}s")
+
+        self.root.after(10000, self.reappend_blocked_process)
         
-        self.execution_list.delete(0)
-        self.execution_list_list.append(self.process)
-        self.execution_list.insert('end', f"#{self.process['id']} | Tiempo Restante: {self.process['remaining_time']}s")
-        self.start_simulation_batch()
-        
+        self.start_simulation_FCFS()
     
+    def reappend_blocked_process(self):
+        if self.blocked_list:
+            self.ready_list.append(self.blocked_list.pop(0))
+        if not self.in_execution and self.ready_list:
+            self.in_execution.append(self.ready_list.pop(0))
+    
+
     def pause_process(self, event):
         if self.process:
             self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s | PAUSADO")
@@ -362,7 +362,7 @@ class BatchProcess:
 
     def start_simulation(self):
         self.start.config(state="disabled")
-        self.start_simulation_batch()
+        self.start_simulation_FCFS()
 
 
 if __name__ == "__main__":
