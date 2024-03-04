@@ -287,7 +287,6 @@ class BatchProcess:
         if not self.in_execution and self.ready_list:
             self.in_execution.append(self.ready_list.pop(0))
             self.process = self.in_execution[0]
-            self.widget_ready_list.delete(0)
             self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s")
 
             self.execution_time_count = self.process['exec_time']
@@ -318,6 +317,7 @@ class BatchProcess:
         if self.process:
             self.execution_data.config(text="INTERRUMPIDO")
             self.blocked_list.append(self.in_execution.pop(0))
+            self.widget_ready_list.delete(0)
 
             # Adjust the remaining time of the last process to start where it was interrupted
             self.blocked_list[-1]['remaining_time'] += 1
