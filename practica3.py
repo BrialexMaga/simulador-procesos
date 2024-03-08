@@ -5,7 +5,8 @@ import time
 class BatchProcess:
     def __init__(self, root):
         # variables
-        self.id_counter = 0
+        self.id_counter = 0     # Global counter for process id
+        self.elapsed_time = 0   # Global timer
         self.process_list = []  # New processes, not ready
         self.ready_list = []
         self.in_execution = []
@@ -46,13 +47,11 @@ class BatchProcess:
         self.batch_count = 0  # Global Counter for batch
         self.start = tk.Button(self.header_frame, text="Iniciar Simulación", font=("Arial", 10), height=2, width=15, command=self.start_simulation)
         self.start.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.remaining_batch = tk.Label(self.header_frame, text="Lotes restantes:\n0", font=("Arial", 15))
+        self.remaining_batch = tk.Label(self.header_frame, text="", font=("Arial", 15))
         self.remaining_batch.grid(row=0, column=2, padx=15, pady=10, sticky="E")
 
         # Global Timer inside header
         self.label = tk.Label(self.header_frame, text="00:00:00", font=("Arial", 20))
-        self.elapsed_time = 0
-        self.global_timer()
         self.label.grid(row=0, column=3, padx=15, pady=10, sticky="E")
 
         self.header_frame.pack(fill="x")
@@ -188,6 +187,9 @@ class BatchProcess:
     ###################### Functions to handle events ######################
     ########################################################################
     def global_timer(self):
+        if not self.process_list and not self.ready_list and not self.in_execution and not self.blocked_list:
+            return  # Stop the timer when all processes are done
+    
         minutes, seconds = divmod(self.elapsed_time, 60)
         hours, minutes = divmod(minutes, 60)
         self.label.config(text="{:02d}:{:02d}:{:02d}".format(hours, minutes, seconds))
@@ -316,7 +318,7 @@ class BatchProcess:
         # If everything is done, stop the simulation and clean
         if not self.process_list and not self.ready_list and not self.in_execution and not self.blocked_list:
             self.execution_data.config(text="")
-            self.remaining_batch.config(text="Lotes restantes:\n0")
+            #self.remaining_batch.config(text="Lotes restantes:\n0")    # Reset the batch counter, but deprecated
             self.execution_time.config(text="")
             self.remaining_time.config(text="")
             self.start.config(state="normal")
@@ -398,6 +400,8 @@ class BatchProcess:
 
     def start_simulation(self):
         self.start.config(state="disabled")
+        self.elapsed_time = 0
+        self.global_timer()
         self.start_simulation_FCFS()
 
 
