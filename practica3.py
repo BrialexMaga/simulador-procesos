@@ -14,6 +14,7 @@ class BatchProcess:
         self.current_timer = None
         self.process = None
         self.is_paused = False
+        self.update_scheduled = False   # To avoid multiple updates of the blocked time
 
         # Window configuration
         self.root = root
@@ -227,6 +228,7 @@ class BatchProcess:
                 "max_time": max_time,
                 "exec_time": 0,
                 "remaining_time": max_time,
+                "blocked_time": 0,
             })
 
             self.list.insert('end', f"#{id_process} - Tiempo Estimado: {max_time}s")
@@ -345,21 +347,41 @@ class BatchProcess:
             # Adjust the remaining time of the last process to start where it was interrupted
             self.blocked_list[-1]['remaining_time'] += 1
             self.blocked_list[-1]['exec_time'] -= 1
+            self.blocked_list[-1]['blocked_time'] = 0
             
             self.root.after_cancel(self.current_timer)
-            self.root.after(4000, self.resume_interrupted_process)
+            self.root.after(1, self.resume_interrupted_process)
 
     def resume_interrupted_process(self):
-        self.start_simulation_FCFS()
-
+        if not self.update_scheduled:
+            self.root.after(1000, self.update_blocked_time)
+            self.update_scheduled = True
+        
         self.root.after(10000, self.reappend_blocked_process)
+        self.start_simulation_FCFS()
+    
+    def update_blocked_time(self):
+        for i, process in enumerate(self.blocked_list):
+            process['blocked_time'] += 1
+            self.widget_blocked_list.delete(i)
+            self.widget_blocked_list.insert(i, f"#{process['id']} | Bloqueado: {process['blocked_time']}s")
+
+        if self.blocked_list:  # If there are still blocked processes, schedule the next update
+            self.root.after(1000, self.update_blocked_time)
+        else:
+            self.update_scheduled = False
     
     def reappend_blocked_process(self):
         if self.blocked_list:
-            self.ready_list.append(self.blocked_list.pop(0))
-            process = self.ready_list[-1]
-            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Estimado: {self.ready_list[-1]['max_time']}s | Restante: {self.ready_list[-1]['remaining_time']}s")
+            process = self.blocked_list.pop(0)
+            self.widget_blocked_list.delete(0)
+            self.ready_list.append(process)
+            self.widget_ready_list.insert('end', f"#{process['id']} | Estimado: {process['max_time']}s | Restante: {process['remaining_time']}s")
+            
             self.start_simulation_FCFS()
+        
+        if not self.blocked_list:
+            self.update_scheduled = False
 
     def pause_process(self, event):
         if self.process:
