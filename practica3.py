@@ -11,6 +11,7 @@ class BatchProcess:
         self.ready_list = []
         self.in_execution = []
         self.blocked_list = []
+        self.finished_processes_list = []
 
         self.current_timer = None
         self.process = None
@@ -20,7 +21,7 @@ class BatchProcess:
         # Window configuration
         self.root = root
         self.root.title("Practica 2")
-        self.root.geometry("1120x405")
+        self.root.geometry("1120x675")
         #self.root.resizable(False, False)
         self.create_widgets()
 
@@ -33,6 +34,7 @@ class BatchProcess:
         self.create_header_frame()
         self.create_execution_frame()
         self.create_process_management_frame()
+        self.create_times_list_frame()
     
     ###########################################################################
     ####################### Functions to create widgets #######################
@@ -181,6 +183,20 @@ class BatchProcess:
 
         # Add to 'multiple frames'
         self.finished_frame.grid(row=0, column=4, padx=0, pady=0)
+    
+
+    def create_times_list_frame(self):
+        self.times_frame = tk.Frame(self.root, padx=150, pady=10)
+
+        self.times_label = tk.Label(self.times_frame, text="Lista de tiempos", font=("Arial", 15))
+        self.widget_times_list = tk.Listbox(self.times_frame, height=12, font=("Arial", 10))
+
+        # Packed content
+        self.times_label.pack(padx=10, pady=10)
+        self.widget_times_list.pack(fill="both", expand=True)
+
+        # Add to 'multiple frames'
+        self.times_frame.pack(fill="x")
 
 
     ########################################################################
@@ -227,10 +243,17 @@ class BatchProcess:
             self.process_list.append({
                 "id": id_process,
                 "operation": operation,
+                "result": "Dummy",
                 "max_time": max_time,
                 "exec_time": 0,
                 "remaining_time": max_time,
                 "blocked_time": 0,
+                "start_time": 0,
+                "end_time": 0,
+                "return_time": 0,
+                "response_time": 0,
+                "waiting_time": 0,
+                "service_time": 0,
             })
 
             self.list.insert('end', f"#{id_process} - Tiempo Estimado: {max_time}s")
@@ -257,8 +280,13 @@ class BatchProcess:
             self.widget_ready_list.delete(0)
             self.operate_result()
             self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = {self.result}")
-            self.in_execution.pop(0)            # Clean the process in execution
+            self.finished_processes_list.append(self.in_execution.pop(0))   # Clean the process in execution, save in finished list
             
+            self.finished_processes_list[-1]['result'] = self.result
+            self.finished_processes_list[-1]['end_time'] = self.elapsed_time - 1
+            self.finished_processes_list[-1]['response_time'] = self.process['response_time']
+            self.finished_processes_list[-1]['service_time'] = self.finished_processes_list[-1]['max_time']
+
             self.start_simulation_FCFS()
 
 
@@ -302,6 +330,7 @@ class BatchProcess:
         # Load new processes to ready list
         while (len(self.ready_list) + len(self.in_execution) + len(self.blocked_list)) < 3 and self.process_list:
             self.ready_list.append(self.process_list.pop(0))
+            self.ready_list[-1]['start_time'] = self.elapsed_time - 1
             self.list.delete(0)
             self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Estimado: {self.ready_list[-1]['max_time']}s | Restante: {self.ready_list[-1]['remaining_time']}s")
         
@@ -309,6 +338,8 @@ class BatchProcess:
         if not self.in_execution and self.ready_list:
             self.in_execution.append(self.ready_list.pop(0))
             self.process = self.in_execution[0]
+            self.process['response_time'] = abs(self.elapsed_time - self.process['start_time'])
+            self.process['waiting_time'] += abs(self.elapsed_time - self.process['start_time'])
             self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s")
 
             self.execution_time_count = self.process['exec_time']
@@ -321,20 +352,33 @@ class BatchProcess:
             #self.remaining_batch.config(text="Lotes restantes:\n0")    # Reset the batch counter, but deprecated
             self.execution_time.config(text="")
             self.remaining_time.config(text="")
+
+            self.show_times()
             self.start.config(state="normal")
     
+
+    def show_times(self):
+        self.widget_times_list.delete(0, 'end')
+        for process in self.finished_processes_list:
+            process['return_time'] = abs(process['end_time'] - process['start_time'])
+            self.widget_times_list.insert('end', f"#{process['id']} | {process['operation']} = {process['result']} | Tiempo estimado: {process['max_time']} | Inicio: {process['start_time']}s | Finalización: {process['end_time']}s | Retorno: {process['return_time']}s | Respuesta: {process['response_time']}s | Espera: {process['waiting_time']}s | Servicio: {process['service_time']}s")
+        
 
     def stop_process(self, event):
         if self.process:
             self.execution_data.config(text="ERROR")
             self.root.after_cancel(self.current_timer)
-            self.root.after(4000, self.resume_stopped_process)
+            self.root.after(1, self.resume_stopped_process)
     
     def resume_stopped_process(self):
         self.widget_ready_list.delete(0)
-        self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = ERROR")
+        self.process['result'] = "ERROR"
+        self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = {self.process['result']}")
 
         # Clean the process in execution
+        self.finished_processes_list.append(self.in_execution.pop(0))
+        self.finished_processes_list[-1]['end_time'] = self.elapsed_time - 1
+        self.finished_processes_list[-1]['service_time'] = self.process['exec_time'] - 1
         self.in_execution = []
         self.process = None
         self.start_simulation_FCFS()
@@ -378,6 +422,7 @@ class BatchProcess:
             process = self.blocked_list.pop(0)
             self.widget_blocked_list.delete(0)
             self.ready_list.append(process)
+            self.ready_list[-1]['waiting_time'] += abs(self.elapsed_time - self.ready_list[-1]['blocked_time'])
             self.widget_ready_list.insert('end', f"#{process['id']} | Estimado: {process['max_time']}s | Restante: {process['remaining_time']}s")
             
             self.start_simulation_FCFS()
