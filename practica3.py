@@ -18,8 +18,8 @@ class BatchProcess:
         # Window configuration
         self.root = root
         self.root.title("Practica 2")
-        self.root.geometry("850x405")
-        self.root.resizable(False, False)
+        self.root.geometry("1120x405")
+        #self.root.resizable(False, False)
         self.create_widgets()
 
         self.root.bind('e', self.stop_process)
@@ -83,13 +83,14 @@ class BatchProcess:
         self.multiple_frames.columnconfigure(1, weight=1)
         self.multiple_frames.columnconfigure(2, weight=1)
         self.multiple_frames.columnconfigure(3, weight=1)
+        self.multiple_frames.columnconfigure(4, weight=1)
 
         self.create_capture_process_frame()
         self.create_process_list_frame()
-        #self.create_execution_batch_frame()
+        
         self.create_ready_list_frame()
+        self.create_blocked_process_frame()
         self.create_finished_process_frame()
-
 
         self.multiple_frames.pack(fill="x")
 
@@ -152,11 +153,26 @@ class BatchProcess:
         self.ready_processes_frame.grid(row=0, column=2, padx=0, pady=0)
 
 
+    def create_blocked_process_frame(self):
+        self.blocked_frame = tk.Frame(self.multiple_frames, width=235, height=275)
+        self.blocked_frame.pack_propagate(False)
+
+        self.blocked_label = tk.Label(self.blocked_frame, text="Procesos Bloqueados", font=("Arial", 15))
+        self.widget_blocked_list = tk.Listbox(self.blocked_frame, font=("Arial", 10))
+
+        # Packed content
+        self.blocked_label.pack(padx=10, pady=10)
+        self.widget_blocked_list.pack(fill="both", expand=True)
+
+        # Add to 'multiple frames'
+        self.blocked_frame.grid(row=0, column=3, padx=0, pady=0)
+    
+
     def create_finished_process_frame(self):
-        self.finished_frame = tk.Frame(self.multiple_frames, width=200, height=275)
+        self.finished_frame = tk.Frame(self.multiple_frames, width=235, height=275)
         self.finished_frame.pack_propagate(False)
 
-        self.finished_label = tk.Label(self.finished_frame, text="Procesos terminados", font=("Arial", 13))
+        self.finished_label = tk.Label(self.finished_frame, text="Procesos terminados", font=("Arial", 15))
         self.finished_list = tk.Listbox(self.finished_frame, font=("Arial", 10))
 
         # Packed content
@@ -164,7 +180,7 @@ class BatchProcess:
         self.finished_list.pack(fill="both", expand=True)
 
         # Add to 'multiple frames'
-        self.finished_frame.grid(row=0, column=3, padx=0, pady=0)
+        self.finished_frame.grid(row=0, column=4, padx=0, pady=0)
 
 
     ########################################################################
@@ -279,11 +295,13 @@ class BatchProcess:
 
 
     def start_simulation_FCFS(self):
+        # Load new processes to ready list
         while (len(self.ready_list) + len(self.in_execution) + len(self.blocked_list)) < 3 and self.process_list:
             self.ready_list.append(self.process_list.pop(0))
             self.list.delete(0)
-            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Tiempo Estimado: {self.ready_list[-1]['max_time']}s")
+            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Estimado: {self.ready_list[-1]['max_time']}s | Restante: {self.ready_list[-1]['remaining_time']}s")
         
+        # Load a ready process to execution
         if not self.in_execution and self.ready_list:
             self.in_execution.append(self.ready_list.pop(0))
             self.process = self.in_execution[0]
@@ -292,7 +310,8 @@ class BatchProcess:
             self.execution_time_count = self.process['exec_time']
             self.remaining_time_count = self.process['remaining_time']
             self.execution_timer()
-                    
+        
+        # If everything is done, stop the simulation and clean
         if not self.process_list and not self.ready_list and not self.in_execution and not self.blocked_list:
             self.execution_data.config(text="")
             self.remaining_batch.config(text="Lotes restantes:\n0")
@@ -310,7 +329,11 @@ class BatchProcess:
     def resume_stopped_process(self):
         self.widget_ready_list.delete(0)
         self.finished_list.insert(0, f"#{self.process['id']} | {self.process['operation']} = ERROR")
-        self.start_simulation_batch()
+
+        # Clean the process in execution
+        self.in_execution = []
+        self.process = None
+        self.start_simulation_FCFS()
 
     
     def interrupt_process(self, event):
@@ -335,7 +358,7 @@ class BatchProcess:
         if self.blocked_list:
             self.ready_list.append(self.blocked_list.pop(0))
             process = self.ready_list[-1]
-            self.widget_ready_list.insert('end', f"#{process['id']} | Tiempo Restante: {process['remaining_time']}s")
+            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Estimado: {self.ready_list[-1]['max_time']}s | Restante: {self.ready_list[-1]['remaining_time']}s")
             self.start_simulation_FCFS()
 
     def pause_process(self, event):
