@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 import random
 import time
 
@@ -17,18 +18,22 @@ class BatchProcess:
         self.process = None
         self.is_paused = False
         self.update_scheduled = False   # To avoid multiple updates of the blocked time
+        self.started_simulation = False
 
         # Window configuration
         self.root = root
         self.root.title("Practica 2")
         self.root.geometry("1120x675")
-        #self.root.resizable(False, False)
+        self.root.resizable(False, False)
         self.create_widgets()
 
-        self.root.bind('e', self.stop_process)
-        self.root.bind('i', self.interrupt_process)
-        self.root.bind('p', self.pause_process)
-        self.root.bind('c', self.continue_process)
+        # New key binds
+        self.root.bind('e', self.interrupt_process)     # Interrupt process
+        self.root.bind('w', self.stop_process)          # Error Binding
+        self.root.bind('p', self.pause_process)         # Pause process
+        self.root.bind('c', self.continue_process)      # Continue process
+        self.root.bind('n', self.create_new_process)    # Create new process
+        self.root.bind('b', self.show_processes_table)  # Show processes table
     
     def create_widgets(self):
         self.create_header_frame()
@@ -103,15 +108,17 @@ class BatchProcess:
 
         # New
         def validate_spinbox_input(input):
-            if input.isdigit() and 0 <= int(input) <= 100:
+            if input.isdigit() and 1 <= int(input) <= 100:
                 return True
             else:
                 return False
         
         validate_command = self.main_frame.register(validate_spinbox_input)
 
+        self.spin_value = tk.IntVar(value=1)
+
         self.no_process_label = tk.Label(self.main_frame, text="Numero de procesos a ingresar:", font=("Arial", 10))
-        self.no_process_input = tk.Spinbox(self.main_frame, from_=0, to=100, font=("Arial", 10), validate='key', validatecommand=(validate_command, '%P'))
+        self.no_process_input = tk.Spinbox(self.main_frame, from_=0, to=100, textvariable=self.spin_value, font=("Arial", 10), validate='key', validatecommand=(validate_command, '%P'))
 
         self.submit_button = tk.Button(self.main_frame, text="Capturar", font=("Arial", 10), command=self.capture_process)
 
@@ -231,6 +238,7 @@ class BatchProcess:
             return random.randint(7, 18)
 
         no_process = int(self.no_process_input.get())
+        self.spin_value.set(1)
 
         i = 0
         while i < no_process:
@@ -355,6 +363,7 @@ class BatchProcess:
 
             self.show_times()
             self.start.config(state="normal")
+            self.started_simulation = False
     
 
     def show_times(self):
@@ -403,7 +412,8 @@ class BatchProcess:
             self.root.after(1000, self.update_blocked_time)
             self.update_scheduled = True
         
-        self.root.after(10000, self.reappend_blocked_process)
+        blocked_time = 9000
+        self.root.after(blocked_time, self.reappend_blocked_process)
         self.start_simulation_FCFS()
     
     def update_blocked_time(self):
@@ -435,6 +445,7 @@ class BatchProcess:
             self.execution_data.config(text=f"#{self.process['id']} | Operación: {self.process['operation']} | Tiempo estimado: {self.process['max_time']}s | PAUSADO")
             self.is_paused = True
             self.root.after_cancel(self.current_timer)
+            self.root.after_cancel(self.global_timer)
 
     def continue_process(self, event):
         if self.process and self.is_paused:
@@ -443,8 +454,109 @@ class BatchProcess:
             self.is_paused = False
     
 
+    def create_new_process(self, event):
+        def generate_operation():
+            def generate_number():
+                return random.randint(0, 50)
+            def generate_operator():
+                operators = ['+', '-', '*', '/', '%']
+                return random.choice(operators)
+            
+            first_number = generate_number()
+            operator = generate_operator()
+            second_number = generate_number()
+            
+            return f'{first_number} {operator} {second_number}'
+        
+        def generate_max_time():
+            return random.randint(7, 18)
+
+        # Add a new process to the list
+        id_process = self.id_counter
+        self.id_counter += 1
+
+        operation = generate_operation()
+        max_time = generate_max_time()
+
+        self.process_list.append({
+                "id": id_process,
+                "operation": operation,
+                "result": "Dummy",
+                "max_time": max_time,
+                "exec_time": 0,
+                "remaining_time": max_time,
+                "blocked_time": 0,
+                "start_time": 0,
+                "end_time": 0,
+                "return_time": 0,
+                "response_time": 0,
+                "waiting_time": 0,
+                "service_time": 0,
+            })
+
+        self.list.insert('end', f"#{id_process} - Tiempo Estimado: {max_time}s")
+
+        # If the simulation has started, load the new process to the ready list to a max of 3
+        while (len(self.ready_list) + len(self.in_execution) + len(self.blocked_list)) < 3 and self.process_list and self.started_simulation:
+            self.ready_list.append(self.process_list.pop(0))
+            self.ready_list[-1]['start_time'] = self.elapsed_time - 1
+            self.list.delete(0)
+            self.widget_ready_list.insert('end', f"#{self.ready_list[-1]['id']} | Estimado: {self.ready_list[-1]['max_time']}s | Restante: {self.ready_list[-1]['remaining_time']}s")
+        
+
+    def show_processes_table(self, event):
+        self.pause_process(event)
+
+        # Create a new window
+        process_window = tk.Toplevel(self.root)
+        process_window.title("Tabla de Procesos")
+
+        # Show the process table
+        tree = ttk.Treeview(process_window, columns=("ID", "Estado", "Operacion", "llegada", "Finalizacion", "Retorno", "Espera", "Servicio", "Restante en CPU", "Respuesta"), show="headings")
+        tree.heading('ID', text="ID")
+        tree.heading('Estado', text="Estado")
+        tree.heading('Operacion', text="Operación")
+        tree.heading('llegada', text="Llegada")
+        tree.heading('Finalizacion', text="Finalización")
+        tree.heading('Retorno', text="Retorno")
+        tree.heading('Espera', text="Espera")
+        tree.heading('Servicio', text="Servicio")
+        tree.heading('Restante en CPU', text="Restante en CPU")
+        tree.heading('Respuesta', text="Respuesta")
+
+        tree.column('ID', width=50, anchor='center')
+        tree.column('Estado', width=100, anchor='center')
+        tree.column('Operacion', anchor='center')
+        tree.column('llegada', width=100, anchor='center')
+        tree.column('Finalizacion', width=100, anchor='center')
+        tree.column('Retorno', width=100, anchor='center')
+        tree.column('Espera', width=100, anchor='center')
+        tree.column('Servicio', width=100, anchor='center')
+        tree.column('Restante en CPU', width=100, anchor='center')
+        tree.column('Respuesta', width=100, anchor='center')
+
+        tree.pack(pady=10, padx=10, fill="x", expand=True)
+
+        # Show the process table
+        for process in self.process_list:
+            tree.insert("", "end", values=(process['id'], "Nuevo", process['operation'], process['start_time'], "", "", "", "", process['remaining_time'], ""))
+        
+        for process in self.ready_list:
+            tree.insert("", "end", values=(process['id'], "Listo", process['operation'], process['start_time'], "", "", process['waiting_time'], "", process['remaining_time'], ""))
+
+        for process in self.in_execution:
+            tree.insert("", "end", values=(process['id'], "Ejecución", process['operation'], process['start_time'], "", process['return_time'], process['waiting_time'], process['service_time'], process['remaining_time'], process['response_time']))
+
+        for process in self.blocked_list:
+            tree.insert("", "end", values=(process['id'], "Bloqueado", process['operation'], process['start_time'], "", process['return_time'], process['waiting_time'], process['service_time'], process['remaining_time'], process['response_time']))
+        
+        for process in self.finished_processes_list:
+            tree.insert("", "end", values=(process['id'], "Terminado", f"{process['operation']} = {process['result']}", process['start_time'], process['end_time'], process['return_time'], process['waiting_time'], process['service_time'], "", process['response_time']))
+    
+
     def start_simulation(self):
         self.start.config(state="disabled")
+        self.started_simulation = True
         self.elapsed_time = 0
         self.global_timer()
         self.start_simulation_FCFS()
